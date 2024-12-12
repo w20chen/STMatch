@@ -46,7 +46,8 @@ namespace STMatch {
     int edge[PAT_SIZE][PAT_SIZE];
 
     PatternPreprocessor(std::string filename) {
-      readfile(filename);
+    //   readfile(filename);
+      readfile_egsm(filename);
       get_matching_order();
       get_partial_order();
       get_set_ops();
@@ -54,7 +55,7 @@ namespace STMatch {
       get_labels();
       convert2oned();
 
-      //std::cout << "Pattern read complete. Pattern size: " << (int)pat.nnodes << std::endl;
+      std::cout << "Pattern read complete. Pattern size: " << (int)pat.nnodes << std::endl;
     }
 
     Pattern* to_gpu() {
@@ -62,6 +63,59 @@ namespace STMatch {
       cudaMalloc(&patcopy, sizeof(Pattern));
       cudaMemcpy(patcopy, &pat, sizeof(Pattern), cudaMemcpyHostToDevice);
       return patcopy;
+    }
+
+    void readfile_egsm(std::string& filename) {
+        std::ifstream infile(filename);
+        if (!infile.is_open()) {
+            std::cout << "Cannot open graph file " << filename << "." << std::endl;
+            exit(-1);
+        }
+
+        char type = 0;
+        int nnodes = 0, nedges = 0;
+        infile >> type >> nnodes >> nedges;
+        pat.nnodes = nnodes;
+        std::cout << "num of query vertices: "<< (int)pat.nnodes << std::endl;
+        assert(type == 't');
+
+        while (infile >> type) {
+            if (type == 'v') {
+                int vid, label, degree;
+                infile >> vid >> label >> degree;
+                vertex_labels.push_back(label);
+            }
+            else {
+                assert(type == 'e');
+                break;
+            }
+        }
+
+        assert(vertex_labels.size() == pat.nnodes);
+        memset(adj_matrix_, 0, sizeof(adj_matrix_));
+
+        if (type == 'e') {
+            std::string next_str;
+            while (true) {
+                int v1, v2;
+                infile >> v1 >> v2;
+
+                adj_matrix_[v1][v2] = 1;
+                adj_matrix_[v2][v1] = 1;
+
+                if (!(infile >> next_str)) {
+                    break;
+                }
+                if (next_str == "e") {
+                    continue;
+                }
+                else if (!(infile >> next_str)) {
+                    break;
+                }
+            }
+        }
+        infile.close();
+        std::cout << "Graph loaded from file " << filename << "." << std::endl;
     }
 
     void readfile(std::string& filename) {
@@ -233,7 +287,9 @@ namespace STMatch {
         p1.push_back(i);
       }
       std::vector<std::vector<int>> permute, valid_permute;
+      printf("permutation started\n");
       _permutation(permute, p1, 0, pat.nnodes - 1);
+      printf("permutation finished\n");
 
       for (auto& pp : permute) {
         std::vector<std::set<int>> adj_tmp(pat.nnodes);

@@ -48,9 +48,92 @@ namespace STMatch {
     // TODO: dryadic graph format 
 
     void readfile(std::string& filename) {
-      //read_lg_file(filename);
-      read_bin_file(filename);
+    //   read_lg_file(filename);
+    //   read_bin_file(filename);
+        read_egsm_file(filename);
+    }
 
+    void read_egsm_file(std::string& filename){
+        std::ifstream infile(filename);
+        if (!infile.is_open()) {
+            std::cout << "Cannot open graph file " << filename << "." << std::endl;
+            exit(-1);
+        }
+
+        char type = 0;
+        infile >> type >> g.nnodes >> g.nedges;
+        assert(type == 't');
+
+        std::vector<std::vector<graph_node_t>> adj_list(g.nnodes);
+        std::vector<int> vertex_labels;
+
+        while (infile >> type) {
+            if (type == 'v') {
+                int vid, label, degree;
+                infile >> vid >> label >> degree;
+                vertex_labels.push_back(label);
+            }
+            else {
+                assert(type == 'e');
+                break;
+            }
+        }
+
+        assert(vertex_labels.size() == g.nnodes);
+        g.vertex_label = new bitarray32[vertex_labels.size()];
+        for (int i = 0; i < g.nnodes; i++) {
+            g.vertex_label[i] = (1 << vertex_labels[i]);
+        }
+
+        if (type == 'e') {
+            std::string next_str;
+            while (true) {
+                int v1, v2;
+                infile >> v1 >> v2;
+
+                adj_list[v1].emplace_back(v2);
+                adj_list[v2].emplace_back(v1);
+
+                if (!(infile >> next_str)) {
+                    break;
+                }
+                if (next_str == "e") {
+                    continue;
+                }
+                else if (!(infile >> next_str)) {
+                    break;
+                }
+            }
+        }
+
+        infile.close();
+
+        g.rowptr = new graph_edge_t[g.nnodes + 1];
+        g.rowptr[0] = 0;
+
+        std::vector<graph_node_t> colidx;
+
+        for (graph_node_t i = 0; i < g.nnodes; i++) {
+            sort(adj_list[i].begin(), adj_list[i].end());
+            int pos = 0;
+            for (graph_node_t j = 1; j < adj_list[i].size(); j++) {
+                if (adj_list[i][j] != adj_list[i][pos]) {
+                    adj_list[i][++pos] = adj_list[i][j];
+                }
+            }
+
+            if (adj_list[i].size() > 0) {
+                colidx.insert(colidx.end(), adj_list[i].data(), adj_list[i].data() + pos + 1);
+            }
+            adj_list[i].clear();
+            g.rowptr[i + 1] = colidx.size();
+        }
+        g.nedges = colidx.size();
+        g.colidx = new graph_node_t[colidx.size()];
+
+        memcpy(g.colidx, colidx.data(), sizeof(graph_node_t) * colidx.size());
+
+        std::cout << "Graph loaded from file " << filename << "." << std::endl;
     }
 
     void read_lg_file(std::string& filename) {
@@ -82,10 +165,10 @@ namespace STMatch {
       assert(vertex_labels.size() == g.nnodes);
 
       g.vertex_label = new bitarray32[vertex_labels.size()];
-      for (int i = 0; i < g.nnodes; i++) {
-        g.vertex_label[i] = (1 << vertex_labels[i]);
-      }
-      // memcpy(g.vertex_label, vertex_labels.data(), sizeof(int) * vertex_labels.size());
+    //   for (int i = 0; i < g.nnodes; i++) {
+    //     g.vertex_label[i] = (1 << vertex_labels[i]);
+    //   }
+      memcpy(g.vertex_label, vertex_labels.data(), sizeof(int) * vertex_labels.size());
 
       g.rowptr = new graph_edge_t[g.nnodes + 1];
       g.rowptr[0] = 0;
